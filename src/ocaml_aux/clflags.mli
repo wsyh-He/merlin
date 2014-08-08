@@ -29,6 +29,7 @@ type set = {
   mutable nopervasives         : bool;
   mutable strict_formats       : bool;
   mutable open_modules         : string list;
+  mutable auto_load            : bool;
 }
 
 (* Manage set of flag *)
@@ -54,6 +55,9 @@ val unsafe_string        : unit -> bool
 val nopervasives         : unit -> bool
 val strict_formats       : unit -> bool
 val open_modules         : unit -> string list
+
+(* Enable autoloading of packages based on findlib *)
+val auto_load            : unit -> bool
 
 (* Dummy values *)
 val annotations          : unit -> bool

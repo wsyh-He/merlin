@@ -248,7 +248,7 @@ type pers_struct =
 
 (* Regroup all internal state *)
 type cache = {
-  persistent_structures : (string, pers_struct option) Hashtbl.t;
+  persistent_structures : (string, (pers_struct * string option) option) Hashtbl.t;
   missing_structures : (string, unit) Hashtbl.t;
   (* Consistency between persistent structures *)
   crc_units : Consistbl.t;
@@ -282,6 +282,8 @@ let new_cache ~unit_name = {
 
 let cache = ref (new_cache ~unit_name:"")
 
+let find_unbound_module = ref (fun (_ : string) -> raise Not_found)
+
 let check_consistency filename crcs =
   try
     List.iter
@@ -292,32 +294,36 @@ let check_consistency filename crcs =
 
 (* Reading persistent structures from .cmi files *)
 
-let read_pers_struct modname filename =
+let read_pers_struct manual modname filename =
   let cmi = Cmi_cache.read_cmi filename in
   let name = cmi.cmi_name in
   let sign = cmi.cmi_sign in
   let crcs = cmi.cmi_crcs in
   let flags = cmi.cmi_flags in
   let comps =
-      !components_of_module' empty Subst.identity
-                             (Pident(Ident.create_persistent name))
-                             (Mty_signature ~:sign) in
-    let ps = { ps_name = name;
-               ps_sig = sign;
-               ps_comps = comps;
-               ps_crcs = crcs;
-               ps_filename = filename;
-               ps_flags = flags } in
-    if ps.ps_name <> modname then
-      raise(Error(Illegal_renaming(ps.ps_name, filename)));
-    check_consistency filename ps.ps_crcs;
-    List.iter
-      (function Rectypes ->
-        if not (Clflags.recursive_types ()) then
-          raise(Error(Need_recursive_types(ps.ps_name, !cache.current_unit))))
-      ps.ps_flags;
-    Hashtbl.add !cache.persistent_structures modname (Some ps);
-    ps
+    !components_of_module' empty Subst.identity
+      (Pident(Ident.create_persistent name))
+      (Mty_signature ~:sign) in
+  let ps = { ps_name = name;
+             ps_sig = sign;
+             ps_comps = comps;
+             ps_crcs = crcs;
+             ps_filename = filename;
+             ps_flags = flags } in
+  if ps.ps_name <> modname then
+    raise(Error(Illegal_renaming(ps.ps_name, filename)));
+  check_consistency filename ps.ps_crcs;
+  List.iter
+    (function Rectypes ->
+      if not (Clflags.recursive_types ()) then
+        raise(Error(Need_recursive_types(ps.ps_name, !cache.current_unit))))
+    ps.ps_flags;
+  let filename = if manual then
+      Some filename
+    else
+      None in
+  Hashtbl.add !cache.persistent_structures modname (Some (ps, filename));
+  ps
 
 let find_pers_struct name =
   if name = "*predef*" then raise Not_found;
@@ -327,15 +333,17 @@ let find_pers_struct name =
   in
   match r with
   | Some None -> raise Not_found
-  | Some (Some sg) -> sg
+  | Some (Some (sg, _)) -> sg
   | None ->
-      let filename =
-        try find_in_path_uncap !load_path (name ^ ".cmi")
+      let manual, filename =
+        try false, find_in_path_uncap !load_path (name ^ ".cmi")
+        with Not_found ->
+        try true, !find_unbound_module name
         with Not_found ->
           Hashtbl.add !cache.persistent_structures name None;
           raise Not_found
       in
-      read_pers_struct name filename
+      read_pers_struct manual name filename
 
 let reset_cache () =
   !cache.current_unit <- "";
@@ -355,15 +363,17 @@ let reset_cache_toplevel () =
 let check_cache_consistency () =
   try
     Hashtbl.iter (fun name ps ->
-       let filename = 
-          try Some (find_in_path_uncap !load_path (name ^ ".cmi")) 
-          with Not_found -> None
+        let filename = match ps with
+          | Some (_, Some manual) -> Some manual
+          | _ ->
+            try Some (find_in_path_uncap !load_path (name ^ ".cmi"))
+            with Not_found -> None
         in
         let invalid =
           match filename, ps with
-          | _, Some ps when Hashtbl.mem !cache.missing_structures name ->
+          | _, Some _ when Hashtbl.mem !cache.missing_structures name ->
             true
-          | Some filename, Some ps
+          | Some filename, Some (ps, _)
             when ps.ps_sig == (Cmi_cache.read_cmi filename).cmi_sign ->
             false
           | None, None -> false
@@ -373,9 +383,9 @@ let check_cache_consistency () =
         if invalid then raise Not_found
       ) !cache.persistent_structures;
     Hashtbl.iter (fun name () ->
-        let invalid = 
+        let invalid =
           try ignore (find_in_path_uncap !load_path (name ^ ".cmi"));
-              true;  
+              true;
           with Not_found -> false
         in
         if invalid then raise Not_found
@@ -743,7 +753,7 @@ let iter_env proj1 proj2 f env =
   Hashtbl.iter
     (fun s pso ->
       match pso with None -> ()
-      | Some ps ->
+      | Some (ps, _) ->
           let id = Pident (Ident.create_persistent s) in
           iter_components id id ps.ps_comps)
     !cache.persistent_structures;
@@ -1252,7 +1262,7 @@ let open_signature ?(loc = Location.none) ?(toplevel = false) root sg env =
 (* Read a signature from a file *)
 
 let read_signature modname filename =
-  let ps = read_pers_struct modname filename in ps.ps_sig
+  let ps = read_pers_struct true modname filename in ps.ps_sig
 
 (* Return the CRC of the interface of the given compilation unit *)
 
@@ -1296,7 +1306,7 @@ let save_signature_with_imports sg modname filename imports =
         ps_crcs = (cmi.cmi_name, crc) :: imports;
         ps_filename = filename;
         ps_flags = cmi.cmi_flags } in
-    Hashtbl.add !cache.persistent_structures modname (Some ps);
+    Hashtbl.add !cache.persistent_structures modname (Some (ps,None));
     Consistbl.set !cache.crc_units modname crc filename;
     sg
   with exn ->
@@ -1344,7 +1354,7 @@ let fold_modules f lid env acc =
         (fun name ps acc ->
           match ps with
               None -> acc
-            | Some ps ->
+            | Some (ps, _) ->
               f name (Pident(Ident.create_persistent name))
                      (Mty_signature ~:(ps.ps_sig)) acc)
         !cache.persistent_structures

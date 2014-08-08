@@ -224,3 +224,7 @@ type cache
 
 val new_cache : unit_name:string -> cache
 val cache : cache ref
+
+(* Function called when a module name cannot be found.
+   It can either returns the path of the cmi to use, or raise Not_found.  *)
+val find_unbound_module : (string -> string) ref

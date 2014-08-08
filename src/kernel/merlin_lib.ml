@@ -12,6 +12,8 @@ module Parser = Merlin_parser
 module Typer  = Merlin_typer
 module Recover = Merlin_recover
 
+let () = Env.find_unbound_module := Merlin_auto_loader.find_unbound_module
+
 (* Project configuration *)
 module Project : sig
   type t
@@ -250,9 +252,13 @@ end = struct
     Warnings.set := prj.warnings ;
     failures
 
+  let default_dot_merlin =
+    {Dot_merlin.empty_config with
+     Dot_merlin.flags = [["-auto-load"]]}
+
   let set_dot_merlin project dm =
     let module Dm = Dot_merlin in
-    let dm = match dm with | Some dm -> dm | None -> Dm.empty_config in
+    let dm = match dm with | Some dm -> dm | None -> default_dot_merlin in
     let cfg = project.dot_config in
     let result, path_pkg = Dot_merlin.path_of_packages dm.Dm.packages in
     project.dot_merlins <- List.map dm.Dm.dot_merlins
@@ -323,7 +329,12 @@ end = struct
     project.validity_stamp <- ref true
 
   let flush_cache project =
-    Cmi_cache.flush ();
+    Cmi_cache.flush ()
+
+  let create () =
+    let project = create () in
+    ignore (set_dot_merlin project None : [> `Ok ]);
+    project
 end
 
 module Buffer : sig

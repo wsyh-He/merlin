@@ -29,6 +29,7 @@ type set = {
   mutable nopervasives         : bool;
   mutable strict_formats       : bool;
   mutable open_modules         : string list;
+  mutable auto_load            : bool;
 }
 
 let fresh () =
@@ -47,6 +48,7 @@ let fresh () =
     nopervasives         = false; (* -nopervasives *)
     strict_formats       = false; (* -strict-formats *)
     open_modules         = [];
+    auto_load            = false; (* -auto-load *)
   }
 
 let copy t = {t with
@@ -198,6 +200,12 @@ let open_modules_spec t =
   Arg.String (fun md -> t.open_modules <- md :: t.open_modules),
   "<module>  Opens the module <module> before typing"
 
+let auto_load () = !set.auto_load
+let auto_load_spec t =
+  "-auto-load",
+  Arg.Unit (fun () -> t.auto_load <- true),
+  " Enable auto-loading of Findlib packages"
+
 (* Dummy values *)
 let annotations         () = false
 let binary_annotations  () = false
@@ -230,5 +238,6 @@ let arg_spec t =
     nopervasives_spec t;
     strict_formats_spec t;
     open_modules_spec t;
+    auto_load_spec t;
   ]
 

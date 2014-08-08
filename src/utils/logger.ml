@@ -80,45 +80,50 @@ let is_monitored x =
 
 let start_time = Unix.time ()
 
-let format level section ?title content =
+let format level section ?title ?exn content =
   let at = Unix.time () -. start_time in
   let level = match level with
     | `error -> "error"
     | `info  -> "info"
     | `debug -> "debug"
   in
-  `Assoc [
+  let fields = [
     "time", `Float at;
     "level", `String level;
     "section", `String (Section.to_string section);
     "title", (match title with None -> `Null | Some s -> `String s);
     "content", content
-  ]
+  ] in
+  let fields = match exn with
+    | None -> fields
+    | Some exn -> fields @ ["exception", `String (Printexc.to_string exn)]
+  in
+  `Assoc fields
 
-let output level section ?title j oc =
-  Json.to_channel oc (format level section ?title j);
+let output level section ?title ?exn j oc =
+  Json.to_channel oc (format level section ?title ?exn j);
   output_char oc '\n';
   flush oc
 
-let logjf level section ?title f j =
+let logjf level section ?title ?exn f j =
   match Section.dest level section with
   | None -> ()
   | Some oc ->
-    output level section ?title (f j) oc
+    output level section ?title ?exn (f j) oc
 
-let logj level section ?title j =
-  logjf level section ?title (fun x -> x) j
+let logj level section ?title ?exn j =
+  logjf level section ?title ?exn (fun x -> x) j
 
-let log level section ?title msg =
-  logj level section ?title (`String msg)
+let log level section ?title ?exn msg =
+  logj level section ?title ?exn (`String msg)
 
-let logf level section ?title f x =
+let logf level section ?title ?exn f x =
   match Section.dest level section with
   | None -> ()
   | Some oc ->
     let ppf, to_string = Format.to_string () in
     f ppf x;
-    output level section ?title (`String (to_string ())) oc
+    output level section ?title ?exn (`String (to_string ())) oc
 
 let info    x = log   `info  x
 let infof   x = logf  `info  x

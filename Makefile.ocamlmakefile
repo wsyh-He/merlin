@@ -133,6 +133,7 @@ SOURCES = \
 	src/kernel/extension.ml           \
 	src/utils/history.mli             \
 	src/utils/history.ml              \
+	src/kernel/merlin_auto_loader.ml  \
 	src/kernel/merlin_lexer.mli       \
 	src/kernel/merlin_lexer.ml        \
 	src/kernel/merlin_recover.mli     \

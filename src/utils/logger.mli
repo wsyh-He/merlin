@@ -48,29 +48,29 @@ val is_monitored : section -> bool
 val forget : section -> unit
 (** [forget section] stops the monitoring of [section] *)
 
-val log : level -> section -> ?title:string -> string -> unit
-val logf : level -> section -> ?title:string ->(Format.formatter -> 'a -> unit) -> 'a -> unit
-val logj : level -> section -> ?title:string ->Std.json -> unit
-val logjf : level -> section -> ?title:string ->('a -> Std.json) -> 'a -> unit
+val log : level -> section -> ?title:string -> ?exn:exn -> string -> unit
+val logf : level -> section -> ?title:string -> ?exn:exn -> (Format.formatter -> 'a -> unit) -> 'a -> unit
+val logj : level -> section -> ?title:string -> ?exn:exn -> Std.json -> unit
+val logjf : level -> section -> ?title:string -> ?exn:exn -> ('a -> Std.json) -> 'a -> unit
 
-val error : section -> ?title:string -> string -> unit
-val errorf : section -> ?title:string -> (Format.formatter -> 'a -> unit) -> 'a -> unit
-val errorj : section -> ?title:string -> Std.json -> unit
-val errorjf : section -> ?title:string -> ('a -> Std.json) -> 'a -> unit
+val error : section -> ?title:string -> ?exn:exn -> string -> unit
+val errorf : section -> ?title:string -> ?exn:exn -> (Format.formatter -> 'a -> unit) -> 'a -> unit
+val errorj : section -> ?title:string -> ?exn:exn -> Std.json -> unit
+val errorjf : section -> ?title:string -> ?exn:exn -> ('a -> Std.json) -> 'a -> unit
 (** [error section msg] behaves as [log] if [section] is being monitored, but
     prints to the default_destination (if it is set) otherwise. *)
 
-val info : section -> ?title:string -> string -> unit
-val infof : section -> ?title:string -> (Format.formatter -> 'a -> unit) -> 'a -> unit
-val infoj : section -> ?title:string -> Std.json -> unit
-val infojf : section -> ?title:string -> ('a -> Std.json) -> 'a -> unit
+val info : section -> ?title:string -> ?exn:exn -> string -> unit
+val infof : section -> ?title:string -> ?exn:exn -> (Format.formatter -> 'a -> unit) -> 'a -> unit
+val infoj : section -> ?title:string -> ?exn:exn -> Std.json -> unit
+val infojf : section -> ?title:string -> ?exn:exn -> ('a -> Std.json) -> 'a -> unit
 (** [info section msg] will output [msg] on the channel dedicated to [section],
     if it is being monitored. *)
 
-val debug : section -> ?title:string -> string -> unit
-val debugf : section -> ?title:string -> (Format.formatter -> 'a -> unit) -> 'a -> unit
-val debugj : section -> ?title:string -> Std.json -> unit
-val debugjf : section -> ?title:string -> ('a -> Std.json) -> 'a -> unit
+val debug : section -> ?title:string -> ?exn:exn -> string -> unit
+val debugf : section -> ?title:string -> ?exn:exn -> (Format.formatter -> 'a -> unit) -> 'a -> unit
+val debugj : section -> ?title:string -> ?exn:exn -> Std.json -> unit
+val debugjf : section -> ?title:string -> ?exn:exn -> ('a -> Std.json) -> 'a -> unit
 (** Use [debug section msg] for mostly unimportant messages, those will be
     displayed only if verbose. *)
 
