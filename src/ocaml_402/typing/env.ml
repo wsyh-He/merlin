@@ -251,6 +251,8 @@ let new_cache ~unit_name = {
 
 let cache = ref (new_cache ~unit_name:"")
 
+let find_unbound_module = ref (fun (_ : string) -> raise Not_found)
+
 let subst_modtype_maker (subst, mty) = Subst.modtype subst mty
 
 let empty = {

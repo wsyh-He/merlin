@@ -292,6 +292,8 @@ let new_cache ~unit_name = {
 
 let cache = ref (new_cache ~unit_name:"")
 
+let find_unbound_module = ref (fun (_ : string) -> raise Not_found)
+
 let check_consistency filename crcs =
   try
     List.iter
@@ -344,6 +346,8 @@ let find_pers_struct name =
   | None ->
       let filename =
         try find_in_path_uncap !load_path (name ^ ".cmi")
+        with Not_found ->
+        try !find_unbound_module name
         with Not_found ->
           Hashtbl.add !cache.persistent_structures name None;
           raise Not_found

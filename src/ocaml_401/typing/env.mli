@@ -241,3 +241,5 @@ type cache
 
 val new_cache : unit_name:string -> cache
 val cache : cache ref
+
+val find_unbound_module : (string -> string) ref
