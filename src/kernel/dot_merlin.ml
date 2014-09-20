@@ -74,17 +74,7 @@ let rec read ~path =
   List.Lazy.Cons (dot_merlin, next)
 
 and find ~path =
-  let rec loop dir =
-    let fname = Filename.concat dir ".merlin" in
-    if Sys.file_exists fname
-    then Some fname
-    else
-      let parent = Filename.dirname dir in
-      if parent <> dir
-      then loop parent
-      else None
-  in
-  match loop (canonicalize_filename path) with
+  match find_in_parent_directories path ~what:".merlin" with
   | Some path -> read path
   | None -> List.Lazy.Nil
 
@@ -145,15 +135,16 @@ let rec parse ?(config=empty_config) =
   | List.Lazy.Cons (dot_merlin, lazy tail) ->
     parse ~config:(parse_dot_merlin dot_merlin config) tail
   | List.Lazy.Nil ->
+    let prepare path = List.rev (List.filter_dup path) in
     {
       dot_merlins = config.dot_merlins;
-      build_path  = List.rev (List.filter_dup config.build_path);
-      source_path = List.rev (List.filter_dup config.source_path);
-      cmi_path    = List.rev (List.filter_dup config.cmi_path);
-      cmt_path    = List.rev (List.filter_dup config.cmt_path);
-      packages    = List.rev (List.filter_dup config.packages);
-      extensions  = List.rev (List.filter_dup config.extensions);
-      flags       = List.rev (List.filter_dup config.flags);
+      build_path  = prepare config.build_path;
+      source_path = prepare config.source_path;
+      cmi_path    = prepare config.cmi_path;
+      cmt_path    = prepare config.cmt_path;
+      packages    = prepare config.packages;
+      extensions  = prepare config.extensions;
+      flags       = prepare config.flags;
     }
 
 let path_of_packages packages =

@@ -25,7 +25,7 @@ module Project : sig
   val set_local_path : t -> string list -> unit
 
   (* Project-wide configuration *)
-  val set_dot_merlin : t -> Dot_merlin.config option -> [`Ok | `Failures of (string * exn) list]
+  val set_dot_merlin : t -> ?fallback_path:string -> Dot_merlin.config option -> [`Ok | `Failures of (string * exn) list]
   val reload_dot_merlin : t -> [`Ok | `Failures of (string * exn) list]
   val autoreload_dot_merlin : t -> [`No | `Ok | `Failures of (string * exn) list]
 
@@ -256,9 +256,22 @@ end = struct
     {Dot_merlin.empty_config with
      Dot_merlin.flags = [["-auto-load"]]}
 
-  let set_dot_merlin project dm =
+  let default_dot_merlin = function
+    | None -> default_dot_merlin
+    | Some path ->
+      match find_in_parent_directories path ~what:"_build" with
+      | None -> default_dot_merlin
+      | Some build_dir ->
+        let build_path = expand_glob ~filter:Sys.is_directory
+            (Filename.concat build_dir "**")
+            default_dot_merlin.Dot_merlin.build_path in
+        {default_dot_merlin with Dot_merlin.build_path}
+
+  let set_dot_merlin project ?fallback_path dm =
     let module Dm = Dot_merlin in
-    let dm = match dm with | Some dm -> dm | None -> default_dot_merlin in
+    let dm = match dm with
+      | Some dm -> dm
+      | None -> default_dot_merlin fallback_path in
     let cfg = project.dot_config in
     let result, path_pkg = Dot_merlin.path_of_packages dm.Dm.packages in
     project.dot_merlins <- List.map dm.Dm.dot_merlins

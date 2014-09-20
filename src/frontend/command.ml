@@ -549,15 +549,17 @@ let dispatch (state : state) =
         Logger.debug Logger.Section.project_load ~title:"command" s;
         List.Lazy.Nil
     in
-    let config = Dot_merlin.parse dot_merlins in
-    let key = match config.Dot_merlin.dot_merlins with
-      | [] -> ""
-      | (a :: _) -> a
-    in
+    let dot_merlins, config =
+      match dot_merlins with
+      | List.Lazy.Nil -> [], None
+      | List.Lazy.Cons (file, _) ->
+        let config = Dot_merlin.parse dot_merlins in
+        config.Dot_merlin.dot_merlins, Some config in
+    let key = match dot_merlins with [] -> "" | x :: _ -> x in
     let project = project_by_key key in
-    let failures = Project.set_dot_merlin project (Some config) in
+    let failures = Project.set_dot_merlin project ~fallback_path:path config in
     state.project <- project;
-    (config.Dot_merlin.dot_merlins, failures)
+    (dot_merlins, failures)
 
   | (Findlib_list : a request) ->
     Fl_package_base.list_packages ()
