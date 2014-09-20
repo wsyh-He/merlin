@@ -130,6 +130,19 @@ let expand_glob ?(filter=fun _ -> true) path acc =
     let patterns = List.map ~f:Glob.compile_pattern subs in
     expand_glob ~filter acc root patterns
 
+let find_in_parent_directories ~what filename =
+  let filename = canonicalize_filename filename in
+  let rec loop dir =
+    let fname = Filename.concat dir what in
+    if Sys.file_exists fname
+    then Some fname
+    else
+      let parent = Filename.dirname dir in
+      if parent <> dir
+      then loop parent
+      else None in
+  loop filename
+
 module Path_list = struct
   type t =
     | StringList of string list ref

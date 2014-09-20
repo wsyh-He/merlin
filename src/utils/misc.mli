@@ -61,6 +61,10 @@ val find_in_path_uncap: Path_list.t -> string -> string
            to match. *)
 val canonicalize_filename : ?cwd:string -> string -> string
         (* Ensure that path is absolute (wrt to cwd), by following ".." and "." *)
+val find_in_parent_directories : what:string -> string -> string option
+        (* [find_in_parent_directories ~what:".merlin" some_path ]
+           searches for a file with name ".merlin" in some_path or any of its
+           parent directories *)
 val expand_glob : ?filter:(string -> bool) -> string -> string list -> string list
         (* [expand_glob ~filter pattern acc] adds all filenames matching
            [pattern] and satistfying the [filter] predicate to [acc]*)
