@@ -427,4 +427,9 @@ let optional_label_sugar = function
     Some e
   | _ -> None
 
+
 let pat_attributes p = p.Typedtree.pat_attributes
+
+let cmo_imports cu = cu.Cmo_format.cu_imports
+let cmx_imports ui = ui.Cmx_format.ui_imports_cmi
+let cmi_crcs cmi = cmi.Cmi_format.cmi_crcs
