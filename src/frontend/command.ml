@@ -881,13 +881,31 @@ let dispatch (state : state) =
     let cmp l1 l2 = Lexing.compare_pos (loc_start l1) (loc_start l2) in
     List.sort ~cmp locs
 
-  | (Users_of_module name : a request) ->
-    let path = Project.build_path (Buffer.project state.buffer) in
-    let filename = find_in_path_uncap path (name ^ ".cmi") in
+  | (Users_of (namespace, name) : a request) ->
+    with_typer state @@ fun typer ->
+    let env = Typer.env typer in
+    let lident = Longident.parse name in
+    let path = match namespace with
+      | `Module      -> Env.lookup_module ~load:false lident env
+      | `Module_type -> fst (Env.lookup_modtype lident env)
+      | `Type        -> fst (Env.lookup_type lident env)
+      | `Value       -> fst (Env.lookup_value lident env)
+    in
+    let path = Env.normalize_path None env path in
+    let head = Path.head path in
+    if not (Ident.global head) then
+      (* Not a global module:
+         1. if it's a local definition, maybe it has a global name
+         2. search for local occurrences ?
+      *)
+      failwith "TODO";
+    let build_path = Project.build_path (Buffer.project state.buffer) in
+    let source_path = Project.source_path (Buffer.project state.buffer) in
+    let filename = find_in_path_uncap build_path (Ident.name head ^ ".cmi") in
     Logger.info (Logger.section "indexer")
       ~title:"Users_of_module filename" filename;
     let index = state.index in
-    Indexer.update_path index (Path_list.to_list path);
+    Indexer.update_path index (Path_list.to_list build_path);
     let cmi = Indexer.find_path index filename in
     let rdeps = Indexer.rdeps index cmi.Indexer.digest in
     let rdeps =
@@ -896,7 +914,40 @@ let dispatch (state : state) =
           with Not_found -> None)
         rdeps
     in
-    List.filter_dup rdeps
+    let names = List.remove (Ident.name head) (List.filter_dup rdeps) in
+    let occurrences name =
+      let open Cmt_format in
+      let rec node_of_part = function
+        | Partial_structure      v -> BrowseT.Structure v
+        | Partial_structure_item v -> BrowseT.Structure_item v
+        | Partial_expression     v -> BrowseT.Expression v
+        | Partial_pattern        v -> BrowseT.Pattern v
+        | Partial_class_expr     v -> BrowseT.Class_expr v
+        | Partial_signature      v -> BrowseT.Signature v
+        | Partial_signature_item v -> BrowseT.Signature_item v
+        | Partial_module_type    v -> BrowseT.Module_type v
+      in
+      let rec nodes_of_annots = function
+        | Packed _ -> [BrowseT.Dummy]
+        | Implementation str -> [BrowseT.Structure str]
+        | Interface sg -> [BrowseT.Signature sg]
+        | Partial_implementation parts | Partial_interface parts ->
+          List.map ~f:node_of_part (Array.to_list parts)
+      in
+      let filename = find_in_path_uncap build_path (name ^ ".cmt") in
+      let nodes = nodes_of_annots Cmt_cache.((read filename).cmt_infos).cmt_annots in
+      let ts = List.map ~f:BrowseT.of_node nodes in
+      let results = List.concat_map ~f:(Browse.all_occurrences path) ts in
+      List.concat_map results
+        ~f:(fun (_,paths) -> List.map ~f:(fun l -> l.Location.loc) paths)
+    in
+    List.map names
+      ~f:(fun name -> name,
+                      (try find_in_path_uncap source_path (name ^ ".ml")
+                       with Not_found ->
+                       try find_in_path_uncap source_path (name ^ ".mli")
+                       with Not_found -> ""),
+                      try occurrences name with exn -> prerr_endline (Printexc.to_string exn); [])
 
   | (Version : a request) ->
     Main_args.version_spec

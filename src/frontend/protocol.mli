@@ -172,9 +172,9 @@ type _ request =
   | Occurrences
     : [`Ident_at of position]
     -> Location.t list request
-  | Users_of_module
-    :  string
-    -> string list request
+  | Users_of
+    :  [`Value|`Module|`Module_type|`Type] * string
+    -> (string * string * Location.t list) list request
   | Idle_job
     : bool request
   | Version

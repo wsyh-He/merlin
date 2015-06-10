@@ -416,8 +416,14 @@ module Protocol_io = struct
       Request (Path (source_or_build var, add_or_remove action, string_list pathes))
     | [`String "project"; `String "get"] ->
       Request (Project_get)
-    | [`String "users"; `String "of"; `String "module"; `String name] ->
-      Request (Users_of_module name)
+    | [`String "users_of"; `String "module"; `String name] ->
+      Request (Users_of (`Module, name))
+    | [`String "users_of"; `String "modtype"; `String name] ->
+      Request (Users_of (`Module_type, name))
+    | [`String "users_of"; `String "value"; `String name] ->
+      Request (Users_of (`Value, name))
+    | [`String "users_of"; `String "type"; `String name] ->
+      Request (Users_of (`Type, name))
     | [`String "version"] ->
       Request (Version)
     | _ -> invalid_arguments ()
@@ -522,8 +528,17 @@ module Protocol_io = struct
         | Occurrences _, locations ->
           `List (List.map locations
                    ~f:(fun loc -> with_location loc []))
-        | Users_of_module _, users ->
-          json_of_string_list users
+        | Users_of _, users ->
+          `List (List.map users
+                   ~f:(fun (user, filename, locations) ->
+                       `Assoc [
+                         "module", `String user;
+                         "file", `String filename;
+                         "locations", `List (
+                           List.map locations
+                             ~f:(fun loc -> with_location loc []))
+                       ]
+                     ))
         | Idle_job, b -> `Bool b
         | Version, version ->
           `String version
