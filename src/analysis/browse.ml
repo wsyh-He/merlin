@@ -99,6 +99,9 @@ let all_occurrences path =
   let rec aux acc t =
     let acc =
       let paths = node_paths t.t_node in
+      List.iter paths ~f:(fun l ->
+          prerr_endline (Printtyp.string_of_path path ^ " =? " ^
+                         Printtyp.string_of_path l.Location.txt));
       let same l = Path.same path l.Location.txt in
       match List.filter ~f:same paths with
       | [] -> acc

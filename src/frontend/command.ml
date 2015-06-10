@@ -891,7 +891,7 @@ let dispatch (state : state) =
       | `Type        -> fst (Env.lookup_type lident env)
       | `Value       -> fst (Env.lookup_value lident env)
     in
-    let path = Env.normalize_path None env path in
+    (*let path = Env.normalize_path None env path in*)
     let head = Path.head path in
     if not (Ident.global head) then
       (* Not a global module:
@@ -900,6 +900,7 @@ let dispatch (state : state) =
       *)
       failwith "TODO";
     let build_path = Project.build_path (Buffer.project state.buffer) in
+    let cmt_path = Project.cmt_path (Buffer.project state.buffer) in
     let source_path = Project.source_path (Buffer.project state.buffer) in
     let filename = find_in_path_uncap build_path (Ident.name head ^ ".cmi") in
     Logger.info (Logger.section "indexer")
@@ -915,7 +916,21 @@ let dispatch (state : state) =
         rdeps
     in
     let names = List.remove (Ident.name head) (List.filter_dup rdeps) in
-    let occurrences name =
+    let find_ml_or_mli cmt =
+      let raw = Filename.chop_extension cmt in
+      if Sys.file_exists (raw ^ ".ml") then
+        (raw ^ ".ml")
+      else if Sys.file_exists (raw ^ ".mli") then
+        (raw ^ ".mli")
+      else
+        let name = Filename.basename raw in
+        try find_in_path_uncap source_path (name ^ ".ml")
+        with Not_found ->
+          try find_in_path_uncap source_path (name ^ ".mli")
+          with Not_found -> ""
+    in
+    let rec lookup name cmt =
+      prerr_endline (name ^ ", cmt = " ^ cmt);
       let open Cmt_format in
       let rec node_of_part = function
         | Partial_structure      v -> BrowseT.Structure v
@@ -928,26 +943,39 @@ let dispatch (state : state) =
         | Partial_module_type    v -> BrowseT.Module_type v
       in
       let rec nodes_of_annots = function
-        | Packed _ -> [BrowseT.Dummy]
         | Implementation str -> [BrowseT.Structure str]
         | Interface sg -> [BrowseT.Signature sg]
         | Partial_implementation parts | Partial_interface parts ->
           List.map ~f:node_of_part (Array.to_list parts)
+        | Packed _ -> assert false
       in
-      let filename = find_in_path_uncap build_path (name ^ ".cmt") in
-      let nodes = nodes_of_annots Cmt_cache.((read filename).cmt_infos).cmt_annots in
-      let ts = List.map ~f:BrowseT.of_node nodes in
-      let results = List.concat_map ~f:(Browse.all_occurrences path) ts in
-      List.concat_map results
-        ~f:(fun (_,paths) -> List.map ~f:(fun l -> l.Location.loc) paths)
+      match Cmt_cache.((read cmt).cmt_infos).cmt_annots with
+      | Packed (_,filenames) ->
+        let cwd = Filename.dirname cmt in
+        let filenames = List.map ~f:(Misc.canonicalize_filename ~cwd) filenames in
+        List.concat_map filenames ~f:(fun filename ->
+            let raw = Filename.chop_extension filename in
+            try lookup (Filename.basename raw) (raw ^ ".cmt")
+            with exn ->
+              prerr_endline (raw ^ ": " ^ Printexc.to_string exn);
+              [])
+      | annots ->
+        let nodes = nodes_of_annots annots in
+        let ts = List.map ~f:BrowseT.of_node nodes in
+        let results = List.concat_map ~f:(Browse.all_occurrences path) ts in
+        [name, find_ml_or_mli cmt,
+         List.concat_map results
+           ~f:(fun (_,paths) -> List.map ~f:(fun l -> l.Location.loc) paths)]
     in
-    List.map names
-      ~f:(fun name -> name,
-                      (try find_in_path_uncap source_path (name ^ ".ml")
-                       with Not_found ->
-                       try find_in_path_uncap source_path (name ^ ".mli")
-                       with Not_found -> ""),
-                      try occurrences name with exn -> prerr_endline (Printexc.to_string exn); [])
+    List.concat_map names
+      ~f:(fun name ->
+          try
+            let cmt = find_in_path_uncap cmt_path (name ^ ".cmt") in
+            let results = lookup name cmt in
+            List.filter ~f:(fun (_,_,l) -> l <> []) results
+          with exn ->
+            prerr_endline (name ^ " : " ^ Printexc.to_string exn);
+            [])
 
   | (Version : a request) ->
     Main_args.version_spec
