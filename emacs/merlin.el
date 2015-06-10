@@ -264,15 +264,10 @@ position POS."
   "Go to the file and position indicated by DATA which is an assoc list
 containing fields file, line and col."
   (let* ((file (assoc 'file data))
-         (open-window (cond ((equal merlin-locate-in-new-window 'never) nil)
-                            ((equal merlin-locate-in-new-window 'always))
-                            (file)))
          (filename (if file (cdr file) buffer-file-name))
          (focus-window (or (not open-window) merlin-locate-focus-new-window))
          (do-open (lambda ()
-                    (if open-window
-                      (find-file-other-window filename)
-                      (find-file filename))
+                    (merlin--find-file filename)
                     (merlin--goto-point (cdr (assoc 'pos data))))))
     (if focus-window
         (progn
@@ -397,8 +392,8 @@ Try to find a satisfying default directory."
   (let* (;; issue #321, start-file-process not always defined
          (start-file-process
           (if (boundp 'start-file-process)
-              #'start-file-process
-            #'start-process))
+              'start-file-process
+            'start-process))
          ;; issue #341, emacs-pty broken with lines >=1024 chars on OSX
          (process-connection-type nil)
          ;; if default-directory doesn't exist, start-file-process will fail
@@ -631,7 +626,7 @@ the error message otherwise print a generic error message."
         (when merlin-debug
           (merlin-debug (format ">%s" string)))
         (tq-enqueue merlin-process-queue string "\n"
-                    closure #'merlin--send-command-async-handler)
+                    closure 'merlin--send-command-async-handler)
         promise))))
 
 (defun merlin/send-command (command &optional callback-if-exn)
@@ -682,10 +677,21 @@ the error message otherwise print a generic error message."
 ;; FILE SWITCHING ;;
 ;;;;;;;;;;;;;;;;;;;;
 
+(defun merlin--find-file (file)
+  "List filenames ending by EXT in the path."
+  (case merlin-locate-in-new-window
+    (never (find-file file))
+    (always (find-file-other-window file))
+    (diff (if (equal (expand-file-name (buffer-file-name))
+                     (expand-file-name file))
+              (find-file file)
+            (find-file-other-window file)))
+    (t (find-file-other-window file))))
+
 (defun merlin-switch-list-by-ext (ext)
   "List filenames ending by EXT in the path."
   (merlin--acquire-buffer)
-  (append (merlin/send-command `(which with_ext ,ext)) nil))
+  (delete-dups (append (merlin/send-command `(which with_ext ,ext)) nil)))
 
 (defun merlin-switch-to (name ext)
   "Switch to NAME.EXT."
@@ -693,8 +699,9 @@ the error message otherwise print a generic error message."
   (let* ((exts (if (listp ext) ext (list ext)))
          (names (mapcar (lambda (ext) (concat name ext)) exts))
          (file (merlin/send-command `(which path ,names)
-                 #'(lambda (err) (message "No such file (message: %s)" err)))))
-    (when file (find-file-other-window file))))
+                 (lambda (err) (message "No such file (message: %s)" err)))))
+    (when file
+      (merlin--find-file file))))
 
 (defun merlin-switch-to-ml (name)
   "Switch to the ML file corresponding to the module NAME (fallback to MLI if no ML is provided)."
@@ -990,7 +997,7 @@ form. Do display of error list."
         (overlay-put overlay 'merlin-kind 'error)
         (overlay-put overlay 'merlin-pending-error err)
         (overlay-put overlay 'merlin-error-group main)
-        (push #'merlin--kill-error-if-edited
+        (push 'merlin--kill-error-if-edited
               (overlay-get overlay 'modification-hooks))
         (when (and merlin-error-in-fringe
                    (not (and (eq err main) subs)))
@@ -1442,7 +1449,7 @@ loading"
   (let* ((dot_merlins (car (merlin--project-get)))
          (file (if (listp dot_merlins) (car dot_merlins) nil)))
     (if file
-        (find-file-other-window file)
+        (merlin--find-file file)
       (message "No project file for the current buffer."))))
 
 (defun merlin-flags-clear ()
