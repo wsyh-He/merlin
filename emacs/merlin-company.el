@@ -118,7 +118,8 @@
                  (cons filename linum))))))
         (candidates
          (merlin/sync-to-point)
-         (let ((prefix (merlin--completion-prefix arg)))
+         (let ((prefix (merlin--completion-prefix arg))
+               (merlin-completion-dwim-force company-search-mode))
            (mapcar #'(lambda (x)
                        (propertize (merlin--completion-full-entry-name prefix x)
                                    'merlin-compl-type (merlin--completion-format-entry x)

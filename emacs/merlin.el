@@ -92,6 +92,10 @@
   "If non-nil, fallback to fuzzier completion when normal completion gives no result."
   :group 'merlin :type 'boolean)
 
+(defvar-local merlin-completion-dwim-force nil
+  "Redefine this variable if you want completion to behave in a specific way
+              (to be used by completion backends)")
+
 (defcustom merlin-completion-types t
   "If non-nil, print the types of the variables during completion."
   :group 'merlin :type 'boolean)
@@ -1120,9 +1124,11 @@ errors in the fringe.  If VIEW-ERRORS-P is non-nil, display a count of them."
          (prefix (car ident-))
          (pos    (merlin/unmake-point (point)))
          (data   (merlin/send-command
-                   (if (and merlin-completion-with-doc);; (> (length ident) 0))
-                     `(complete prefix ,ident at ,pos with doc)
-                     `(complete prefix ,ident at ,pos))))
+                   (if merlin-completion-dwim-force
+                       `(expand prefix ,ident at ,pos)
+                    (if (and merlin-completion-with-doc);; (> (length ident) 0))
+                      `(complete prefix ,ident at ,pos with doc)
+                      `(complete prefix ,ident at ,pos)))))
          ;; all classic entries
          (entries (cdr (assoc 'entries data)))
          ;; context is 'null or ('application ...)
@@ -1139,7 +1145,8 @@ errors in the fringe.  If VIEW-ERRORS-P is non-nil, display a count of them."
          (labels (and application (cdr (assoc 'labels application)))))
     (setq labels (merlin--completion-prepare-labels labels suffix))
     ;; DWIM completion
-    (when (and merlin-completion-dwim (not labels) (not entries))
+    (when (and merlin-completion-dwim (not merlin-completion-dwim-force)
+               (not labels) (not entries))
       (setq data (merlin/send-command `(expand prefix ,ident at ,pos)))
       (setq entries (cdr (assoc 'entries data)))
       (setq-local merlin--dwimed t)
