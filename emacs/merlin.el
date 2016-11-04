@@ -291,7 +291,7 @@ return DEFAULT or the value associated to KEY."
   (get-buffer-create merlin-occurrences-buffer-name))
 
 (defun merlin--differs-from-current-file (path)
-  (not (string-equal path buffer-file-name)))
+  (not (string-equal path (buffer-file-name))))
 
 (defun merlin--rev-map-flatten (f xs &optional acc)
   (while (consp xs)
@@ -393,16 +393,18 @@ return (LOC1 . LOC2)."
   (merlin-debug "# calling binary: %S with arguments: %S.\n" path args)
   (let ((ib  (current-buffer))
         (tmp (when merlin-debug (make-temp-file "merlin")))
+        (wd  (expand-file-name default-directory))
         result)
     (with-temp-buffer
       (let ((ob (current-buffer)))
         (with-current-buffer ib
-          (apply 'call-process-region (point-min) (point-max) path nil
-                 (list ob tmp) nil
-                 "single" (car args)
-                 "-protocol" "sexp"
-                 "-log-file" (if merlin-debug "-" "")
-                 (cdr args))))
+          (let ((default-directory wd))
+            (apply 'call-process-region (point-min) (point-max) path nil
+                   (list ob tmp) nil
+                   "single" (car args)
+                   "-protocol" "sexp"
+                   "-log-file" (if merlin-debug "-" "")
+                   (cdr args)))))
       (setq result (buffer-string))
       (merlin-debug "# stdout\n%s" result)
       (when tmp
@@ -417,16 +419,16 @@ return (LOC1 . LOC2)."
 (defun merlin--call-merlin (command &rest args)
   "TODO"
   ; Really start process
-  (let* ((binary      (merlin-command))
-         (flags       (merlin-lookup 'flags merlin-buffer-configuration))
-         (process-environment (merlin-lookup 'env merlin-buffer-configuration))
-         ; FIXME use logfile
-         (logfile     (or (merlin-lookup 'logfile merlin-buffer-configuration)
-                          merlin-logfile))
-         (extensions  (merlin--map-flatten (lambda (x) (cons "-extension" x))
-                                           merlin-buffer-extensions))
-         (packages    (merlin--map-flatten (lambda (x) (cons "-package" x))
-                                           merlin-buffer-packages)))
+  (let ((binary      (merlin-command))
+        (flags       (merlin-lookup 'flags merlin-buffer-configuration))
+        (process-environment (merlin-lookup 'env merlin-buffer-configuration))
+        ; FIXME use logfile
+        (logfile     (or (merlin-lookup 'logfile merlin-buffer-configuration)
+                         merlin-logfile))
+        (extensions  (merlin--map-flatten (lambda (x) (cons "-extension" x))
+                                          merlin-buffer-extensions))
+        (packages    (merlin--map-flatten (lambda (x) (cons "-package" x))
+                                          merlin-buffer-packages)))
     (setq args (merlin--map-flatten
                  (lambda (x) (if (stringp x) x (prin1-to-string x)))
                  packages
@@ -439,10 +441,11 @@ return (LOC1 . LOC2)."
 
 (defun merlin/call (command &rest args)
   "TODO"
-  (let* ((result (car (read-from-string (merlin--call-merlin command args))))
-         (notifications (cdr-safe (assoc 'notifications result)))
-         (class (cdr-safe (assoc 'class result)))
-         (value (cdr-safe (assoc 'value result))))
+  (let ((result (car (read-from-string (merlin--call-merlin command args))))
+        notifications class value)
+    (setq notifications (cdr-safe (assoc 'notifications result)))
+    (setq class (cdr-safe (assoc 'class result)))
+    (setq value (cdr-safe (assoc 'value result))))
     (dolist (notification notifications)
       (message "(merlin) %s" notification))
     (cond ((string-equal class "return") value)
@@ -450,7 +453,7 @@ return (LOC1 . LOC2)."
            (error "merlin-mode failure: %S" value))
           ((string-equal class "error")
            (error "merlin: %S" value))
-          (t (error "unknown answer: %S:%S" class value)))))
+          (t (error "unknown answer: %S:%S" class value))))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; FILE SWITCHING ;;
@@ -463,9 +466,9 @@ return (LOC1 . LOC2)."
 
 (defun merlin-switch-to (name &rest exts)
   "Switch to NAME.EXTS."
-  (let* ((file (merlin/call "path-of-source"
-                (merlin--map-flatten
-                  (lambda (ext) (cons "-file" (concat name ext))) exts))))
+  (let ((file (merlin/call "path-of-source"
+               (merlin--map-flatten
+                 (lambda (ext) (cons "-file" (concat name ext))) exts))))
     (when file (merlin-find-file file))))
 
 (defun merlin-switch-to-ml (name)

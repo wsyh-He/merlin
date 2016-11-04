@@ -104,7 +104,7 @@
          (ignore-errors
            (let ((data (merlin/locate arg)))
              (when (listp data)
-               (let ((filename (merlin-lookup 'file data buffer-file-name))
+               (let ((filename (merlin-lookup 'file data (buffer-file-name)))
                      (linum (cdr (assoc 'line (assoc 'pos data)))))
                  (cons filename linum))))))
         (candidates
