@@ -396,6 +396,11 @@ and from_path ~config path =
     let save_digest_and_return root =
       let {Cmt_cache. cmt_infos} = Cmt_cache.read root in
       File_switching.move_to ?digest:cmt_infos.Cmt_format.cmt_source_digest root ;
+      let fname =
+        match cmt_infos.Cmt_format.cmt_sourcefile with
+        | None   -> fname
+        | Some f -> f
+      in
       let pos = Lexing.make_pos ~pos_fname:fname (1, 0) in
       let loc = { Location. loc_start=pos ; loc_end=pos ; loc_ghost=true } in
       Some (loc, None)
@@ -470,11 +475,15 @@ let find_source ~config loc =
   in
   match Utils.find_all_matches ~config ~with_fallback file with
   | [] ->
-    logf "find_source" "failed to find \"%s\" in source path (fallback = %b)"
-      filename with_fallback ;
-    logf "find_source" "(for reference: fname = %S)" fname;
-    logf "find_source" "looking in '%s'" dir ;
-    Some (Utils.find_file_with_path ~config ~with_fallback file [dir])
+    logf "find_source" "failed to find %S in source path (fallback = %b)"
+       filename with_fallback ;
+    logf "find_source" "looking for %S in %S" (File.name file) dir ;
+    begin try Some (Utils.find_file_with_path ~project ~with_fallback file [dir])
+    with (File.Not_found _ | Not_found) as exn->
+      logf "find_source" "Trying to find %S in %S directly" fname dir;
+      try Some (Misc.find_in_path [dir] fname)
+      with _ -> raise exn
+    end
   | [ x ] -> Some x
   | files ->
     logf "find_source"
@@ -698,6 +707,10 @@ let inspect_pattern is_path_capitalized p =
 
         (where [ ] represents the cursor.)
         So err... TODO? *)
+    None
+  | Tpat_alias _ ->
+    (* Assumption: if [Browse.enclosing] stopped on this node and not on the
+       subpattern, then it must mean that the cursor is on the alias. *)
     None
   | _ ->
     (* We attach the type here so in the case of disambiguated constructors (or
